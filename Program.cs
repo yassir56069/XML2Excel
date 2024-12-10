@@ -7,17 +7,8 @@ using System.Threading;
 using OfficeOpenXml;
 
 /// <summary>
-/// Provides a robust XML to Excel conversion utility with file watching and batch conversion capabilities.
-/// This application monitors a specified folder for XML files, allows batch conversion of existing files,
-/// and supports continuous file monitoring.
+/// Provides a robust XML to Excel conversion utility with batch and file watching capabilities
 /// </summary>
-/// <remarks>
-/// Key Features:
-/// - Scans input folder on launch for existing XML files
-/// - Provides user option to convert existing files
-/// - Continuous file system watching for new XML files
-/// - Flexible XML to Excel conversion supporting complex XML structures
-/// </remarks>
 class XmlToExcelConverter
 {
     /// <summary>
@@ -57,47 +48,47 @@ class XmlToExcelConverter
     }
 
     /// <summary>
-    /// Starts the XML conversion process by first checking for existing files
-    /// and then setting up continuous file system monitoring
+    /// Converts existing XML files in the input folder to Excel
     /// </summary>
-    public void Start()
+    /// <returns>Number of files converted</returns>
+    public int ConvertXmlToExcelBatchHandling()
     {
         // Check for existing XML files
         string[] existingXmlFiles = Directory.GetFiles(watchFolder, "*.xml");
+        int convertedFiles = 0;
 
         if (existingXmlFiles.Length > 0)
         {
             Console.WriteLine($"Found {existingXmlFiles.Length} existing XML file(s).");
-            Console.Write("Would you like to convert these files now? (Y/N): ");
 
-            var response = Console.ReadKey();
-            Console.WriteLine(); // Move to next line
-
-            if (char.ToUpper(response.KeyChar) == 'Y')
+            // Convert existing files
+            foreach (var file in existingXmlFiles)
             {
-                // Convert existing files
-                foreach (var file in existingXmlFiles)
+                try
                 {
-                    try
-                    {
-                        ConvertXmlToExcel(file, true);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
-                    }
+                    ConvertXmlToExcel(file, true);
+                    convertedFiles++;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
                 }
             }
+
+            Console.WriteLine($"Converted {convertedFiles} file(s) in batch mode.");
+        }
+        else
+        {
+            Console.WriteLine("No XML files found in the input folder.");
         }
 
-        // Start file system watcher for new files
-        StartWatching();
+        return convertedFiles;
     }
 
     /// <summary>
-    /// Sets up a FileSystemWatcher to continuously monitor the input folder for new XML files
+    /// Starts continuous file system monitoring for new XML files
     /// </summary>
-    private void StartWatching()
+    public void ConvertXmlToExcelWatchHandling()
     {
         FileSystemWatcher watcher = new FileSystemWatcher(watchFolder);
 
@@ -267,7 +258,7 @@ class XmlToExcelConverter
     /// <summary>
     /// Main entry point of the application
     /// </summary>
-    /// <param name="args">Command-line arguments (not used)</param>
+    /// <param name="args">Command-line arguments to specify mode</param>
     static void Main(string[] args)
     {
         // Specify the folders 
@@ -280,8 +271,43 @@ class XmlToExcelConverter
             "ConvertedXML"
         );
 
-        // Create converter and start processing
+        // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder);
-        converter.Start();
+
+        // Determine mode based on command-line argument
+        if (args.Length > 0)
+        {
+            switch (args[0].ToLower())
+            {
+                case "batch":
+                    Console.WriteLine("Running in Batch Mode");
+                    converter.ConvertXmlToExcelBatchHandling();
+                    break;
+
+                case "watch":
+                    Console.WriteLine("Running in Watch Mode");
+                    converter.ConvertXmlToExcelWatchHandling();
+                    break;
+
+                default:
+                    Console.WriteLine("Invalid mode. Use 'batch' or 'watch'.");
+                    ShowUsage();
+                    return;
+            }
+        }
+        else
+        {
+            ShowUsage();
+        }
+    }
+
+    /// <summary>
+    /// Displays usage instructions for the application
+    /// </summary>
+    static void ShowUsage()
+    {
+        Console.WriteLine("Usage:");
+        Console.WriteLine("XmlToExcelConverter.exe batch   - Convert existing XML files");
+        Console.WriteLine("XmlToExcelConverter.exe watch   - Watch folder for new XML files");
     }
 }
