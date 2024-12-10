@@ -56,6 +56,7 @@ class XmlToExcelConverter
         // Check for existing XML files
         string[] existingXmlFiles = Directory.GetFiles(watchFolder, "*.xml");
         int convertedFiles = 0;
+        Console.WriteLine($"Opering in folder: {watchFolder}");
 
         if (existingXmlFiles.Length > 0)
         {
@@ -262,14 +263,9 @@ class XmlToExcelConverter
     static void Main(string[] args)
     {
         // Specify the folders 
-        string watchFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "XMLInput"
-        );
-        string destinationFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "ConvertedXML"
-        );
+        string watchFolder = @"C:\XmlWatcherService\XML2EXCEL\XMLInput";
+        string destinationFolder = @"C:\XmlWatcherService\XML2EXCEL\ConvertedXML";
+
 
         // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder);
