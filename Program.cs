@@ -93,7 +93,7 @@ class XmlToExcelConverter
             {
                 try
                 {
-                    ConvertXmlToExcel(file, true);
+                    ConvertXmlToExcel(file);
                     convertedFiles++;
                 }
                 catch (Exception ex)
@@ -182,7 +182,7 @@ class XmlToExcelConverter
                             DateTime xmlDateOfEntry = reader.GetDateTime(2);
 
                             Console.WriteLine($"Query Result:");
-                            Console.WriteLine($"XmlID: {xmlId}");
+                            Console.WriteLine($"XmlID: {xmlId}");   
                             Console.WriteLine($"XmlName: {xmlName}");
                             Console.WriteLine($"XmlDateOfEntry: {xmlDateOfEntry}");
                         }
@@ -199,6 +199,47 @@ class XmlToExcelConverter
             }
         }
     }
+
+/// <summary>
+/// Inserts XML data from the specified file into the XmlRepo table.
+/// </summary>
+/// <param name="xmlFilePath">The path to the XML file to be inserted.</param>
+private static void InsertXmlToDB(string xmlFilePath)
+{
+    // Define the query with parameters
+    string query = @"
+        INSERT INTO XmlRepo (XmlFile, XmlDateOfEntry)
+        VALUES (@XmlFile, GETDATE());
+    ";
+
+    // Load XML document as a string
+    XDocument xmlContent = XDocument.Load(xmlFilePath);
+
+
+        using (SqlConnection connection = new SqlConnection(connectionString))
+    {
+        try
+        {
+            connection.Open();
+
+            using (SqlCommand command = new SqlCommand(query, connection))
+            {
+                // Add the XML content as a parameter
+                command.Parameters.AddWithValue("@XmlFile", xmlContent.ToString());
+
+                // Execute the query
+                int rowsAffected = command.ExecuteNonQuery();
+
+                Console.WriteLine($"{rowsAffected} row(s) inserted into the XmlRepo table.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred while inserting the XML data: {ex.Message}");
+        }
+    }
+}
+
 
     /// <summary>
     /// Converts existing Excel files in the revert folder back to XML
@@ -253,7 +294,7 @@ class XmlToExcelConverter
             Thread.Sleep(500);
 
             // Convert the XML to Excel (not from initial files)
-            ConvertXmlToExcel(e.FullPath, false);
+            ConvertXmlToExcel(e.FullPath);
         }
         catch (Exception ex)
         {
@@ -261,84 +302,62 @@ class XmlToExcelConverter
         }
     }
 
-    /// <summary>
-    /// Converts an XML file to Excel, with optional handling for initial files
-    /// </summary>
-    /// <param name="xmlFilePath">Full path to the XML file</param>
-    /// <param name="isInitialFile">Indicates if the file is from the initial batch</param>
-    private void ConvertXmlToExcel(string xmlFilePath, bool isInitialFile)
+    private void ConvertXmlToExcel(string xmlFilePath)
     {
-        try
-        {
-            // Load XML document
-            XDocument xdoc = XDocument.Load(xmlFilePath);
+        // Load XML document
+        XDocument xdoc = XDocument.Load(xmlFilePath);
 
-            // Create a new Excel package
-            using (var package = new ExcelPackage())
+        // Create a new Excel package
+        using (var package = new ExcelPackage())
+        {
+            // Add a new worksheet
+            var worksheet = package.Workbook.Worksheets.Add("XMLData");
+
+            // Determine the structure of the XML
+            var elements = xdoc.Descendants().Where(e => e.HasElements == false).ToList();
+
+            // Get unique element names for headers
+            var headers = elements.Select(e => e.Name.LocalName).Distinct().ToList();
+
+            // Write headers
+            for (int i = 0; i < headers.Count; i++)
             {
-                // Convert XML to flat data structure
-                var flattenedData = FlattenXml(xdoc.Root);
-
-                // Create worksheets for different sections
-                foreach (var section in flattenedData)
-                {
-                    var worksheet = package.Workbook.Worksheets.Add(section.Key);
-
-                    // Get all unique keys across all rows
-                    var allKeys = section.Value
-                        .SelectMany(dict => dict.Keys)
-                        .Distinct()
-                        .ToList();
-
-                    // Write headers
-                    for (int i = 0; i < allKeys.Count; i++)
-                    {
-                        worksheet.Cells[1, i + 1].Value = allKeys[i];
-                    }
-
-                    // Write data
-                    for (int rowIndex = 0; rowIndex < section.Value.Count; rowIndex++)
-                    {
-                        var rowData = section.Value[rowIndex];
-                        for (int colIndex = 0; colIndex < allKeys.Count; colIndex++)
-                        {
-                            var key = allKeys[colIndex];
-                            if (rowData.TryGetValue(key, out var value))
-                            {
-                                worksheet.Cells[rowIndex + 2, colIndex + 1].Value = value;
-                            }
-                        }
-                    }
-                }
-
-                // Determine output path based on whether it's an initial file
-                string outputFolder = isInitialFile ? initialFilesFolder : destinationFolder;
-                string outputFileName = Path.Combine(
-                    outputFolder,
-                    Path.GetFileNameWithoutExtension(xmlFilePath) + ".xlsx"
-                );
-
-                // Save the Excel file
-                FileInfo fileInfo = new FileInfo(outputFileName);
-                package.SaveAs(fileInfo);
-
-                Console.WriteLine($"Converted {Path.GetFileName(xmlFilePath)} to Excel: {outputFileName}");
+                worksheet.Cells[1, i + 1].Value = headers[i];
             }
-            // Ensure the ProcessedXMLs directory exists
-            Directory.CreateDirectory(processedBatchFolder);
 
-            // Move the original XML file to the ProcessedXMLs folder
-            string processedXmlPath = Path.Combine(processedBatchFolder, Path.GetFileName(xmlFilePath));
-            File.Move(xmlFilePath, processedXmlPath);
+            // Group elements by their parent
+            var groupedElements = elements
+                .GroupBy(e => e.Parent)
+                .Where(g => g.Key != null);
 
-            Console.WriteLine($"Moved {Path.GetFileName(xmlFilePath)} to ProcessedXMLs: {processedXmlPath}");
+            // Write data
+            int rowIndex = 2;
+            foreach (var group in groupedElements)
+            {
+                int colIndex = 1;
+                foreach (var header in headers)
+                {
+                    var value = group.FirstOrDefault(e => e.Name.LocalName == header);
+                    worksheet.Cells[rowIndex, colIndex].Value = value?.Value;
+                    colIndex++;
+                }
+                rowIndex++;
+            }
 
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error processing {Path.GetFileName(xmlFilePath)}: {ex.Message}");
+            // Generate output filename
+            string outputFileName = Path.Combine(
+                destinationFolder,
+                Path.GetFileNameWithoutExtension(xmlFilePath) + ".xlsx"
+            );
+
+            // Save the Excel file
+            FileInfo fileInfo = new FileInfo(outputFileName);
+            package.SaveAs(fileInfo);
+
+            Console.WriteLine($"Converted {Path.GetFileName(xmlFilePath)} to Excel: {outputFileName}");
         }
     }
+
 
     /// <summary>
     /// Converts an Excel file back to XML
@@ -450,6 +469,7 @@ class XmlToExcelConverter
 
                 // Save the XML file
                 xmlDoc.Save(outputFileName);
+                InsertXmlToDB(outputFileName);
 
                 Console.WriteLine($"Converted {Path.GetFileName(excelFilePath)} back to XML: {outputFileName}");
             }
@@ -462,21 +482,7 @@ class XmlToExcelConverter
             Console.WriteLine($"Stack Trace: {ex.StackTrace}");
         }
     }
-
-    /// <summary>
-    /// Flattens a complex XML structure into a dictionary of lists for Excel conversion
-    /// </summary>
-    /// <param name="element">Root XML element to flatten</param>
-    /// <returns>A dictionary where keys are element names and values are lists of flattened data</returns>
-    private Dictionary<string, List<Dictionary<string, string>>> FlattenXml(XElement element)
-    {
-        var result = new Dictionary<string, List<Dictionary<string, string>>>();
-
-        // Recursively process the XML
-        ProcessElement(element, result);
-
-        return result;
-    }
+    
 
     /// <summary>
     /// Recursively processes XML elements to extract data into a flattened structure
