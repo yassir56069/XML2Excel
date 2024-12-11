@@ -5,6 +5,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using OfficeOpenXml;
+using System.Data.SqlClient;
 
 /// <summary>
 /// Provides a robust XML to Excel conversion utility with batch and file watching capabilities
@@ -12,24 +13,31 @@ using OfficeOpenXml;
 class XmlToExcelConverter
 {
     /// <summary>
+    /// Establish SQL Connection
+    /// by retrieving connection string from app.config
+    /// </summary>
+    /// <remarks> TODO: use secrets.json for connection string </remarks>
+    private static string connectionString;
+
+    /// <summary>
     /// Folder path where XML input files are located
     /// </summary>
-    private string watchFolder;
+    private readonly string watchFolder;
 
     /// <summary>
     /// Folder for processed xmls in batch runs, to avoid duplicate batch runs where possible
     /// </summary>
-    private string processedBatchFolder;
+    private readonly string processedBatchFolder;
 
     /// <summary>
     /// Destination folder where converted Excel files will be saved
     /// </summary>
-    private string destinationFolder;
+    private readonly string destinationFolder;
 
     /// <summary>
     /// Subfolder for initially found XML files
     /// </summary>
-    private string initialFilesFolder;
+    private readonly string initialFilesFolder;
 
     /// <summary>
     /// Initializes a new instance of the XmlToExcelConverter with specified folder paths
@@ -38,12 +46,15 @@ class XmlToExcelConverter
     /// <param name="destinationFolder">Directory where converted files will be saved</param>
     public XmlToExcelConverter(string watchFolder, string destinationFolder, string processedBatchFolder)
     {
+        // Establish SQL Connection
+        connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+
+
         // Ensure all required directories exist
         this.watchFolder = watchFolder;
         this.destinationFolder = destinationFolder;
         this.processedBatchFolder = processedBatchFolder;
         this.initialFilesFolder = Path.Combine(destinationFolder, "InitialFiles");
-
 
         // Create directories if they don't exist
         Directory.CreateDirectory(watchFolder);
@@ -293,6 +304,38 @@ class XmlToExcelConverter
 
         // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder);
+
+
+        // SQL query
+        string query = "SELECT * FROM XmlRepo";
+
+        // connection
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            try
+            {
+                connection.Open();
+                Console.WriteLine("Connection successful!");
+
+                // Execute query
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            // Replace 0 and 1 with your column indices
+                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message}");
+            }
+        }
+
 
         // Determine mode based on command-line argument
         if (args.Length > 0)
