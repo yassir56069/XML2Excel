@@ -305,43 +305,9 @@ class XmlToExcelConverter
         // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder);
 
-        BasicSQLQueryTest();
 
-
-        // Determine mode based on command-line argument
-        if (args.Length > 0)
-        {
-            switch (args[0].ToLower())
-            {
-                case "batch":
-                    Console.WriteLine("Running in Batch Mode");
-                    converter.ConvertXmlToExcelBatchHandling();
-                    break;
-
-                case "watch":
-                    Console.WriteLine("Running in Watch Mode");
-                    converter.ConvertXmlToExcelWatchHandling();
-                    break;
-
-                default:
-                    Console.WriteLine("Invalid mode. Use 'batch' or 'watch'.");
-                    ShowUsage();
-                    return;
-            }
-        }
-        else
-        {
-            ShowUsage();
-        }
-    }
-
-    /// <summary>
-    /// Tests the SQL Connection with a basic query from the XmlRepo File. If this isn't working then there's a problem with the connection.
-    /// </summary>
-    private static void BasicSQLQueryTest()
-    {
         // SQL query
-        string query = "SELECT 1 FROM XmlRepo";
+        string query = "SELECT * FROM XmlRepo";
 
         // connection
         using (SqlConnection connection = new SqlConnection(connectionString))
@@ -368,6 +334,33 @@ class XmlToExcelConverter
             {
                 Console.WriteLine($"An error occurred: {ex.Message}");
             }
+        }
+
+
+        // Determine mode based on command-line argument
+        if (args.Length > 0)
+        {
+            switch (args[0].ToLower())
+            {
+                case "batch":
+                    Console.WriteLine("Running in Batch Mode");
+                    converter.ConvertXmlToExcelBatchHandling();
+                    break;
+
+                case "watch":
+                    Console.WriteLine("Running in Watch Mode");
+                    converter.ConvertXmlToExcelWatchHandling();
+                    break;
+
+                default:
+                    Console.WriteLine("Invalid mode. Use 'batch' or 'watch'.");
+                    ShowUsage();
+                    return;
+            }
+        }
+        else
+        {
+            ShowUsage();
         }
     }
 
