@@ -275,7 +275,7 @@ class XmlToExcelConverter
         {
             // Query for the earliest entry by XmlDateOfEntry
             query = @"
-                SELECT TOP 1 XmlID, XmlName, XmlDateOfEntry 
+                SELECT TOP 1 XmlID, XmlFile, XmlDateOfEntry 
                 FROM XmlRepo 
                 ORDER BY XmlDateOfEntry ASC";
         }
@@ -283,7 +283,7 @@ class XmlToExcelConverter
         {
             // Query for a specific entry by XmlID
             query = @"
-                SELECT XmlID, XmlName, XmlDateOfEntry 
+                SELECT XmlID, XmlFile, XmlDateOfEntry 
                 FROM XmlRepo 
                 WHERE XmlID = @XmlID";
         }
