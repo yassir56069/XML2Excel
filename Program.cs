@@ -305,36 +305,7 @@ class XmlToExcelConverter
         // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder);
 
-
-        // SQL query
-        string query = "SELECT * FROM XmlRepo";
-
-        // connection
-        using (SqlConnection connection = new SqlConnection(connectionString))
-        {
-            try
-            {
-                connection.Open();
-                Console.WriteLine("Connection successful!");
-
-                // Execute query
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            // Replace 0 and 1 with your column indices
-                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An error occurred: {ex.Message}");
-            }
-        }
+        BasicSQLQueryTest();
 
 
         // Determine mode based on command-line argument
@@ -361,6 +332,42 @@ class XmlToExcelConverter
         else
         {
             ShowUsage();
+        }
+    }
+
+    /// <summary>
+    /// Tests the SQL Connection with a basic query from the XmlRepo File. If this isn't working then there's a problem with the connection.
+    /// </summary>
+    private static void BasicSQLQueryTest()
+    {
+        // SQL query
+        string query = "SELECT 1 FROM XmlRepo";
+
+        // connection
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            try
+            {
+                connection.Open();
+                Console.WriteLine("Connection successful!");
+
+                // Execute query
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            // Replace 0 and 1 with your column indices
+                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message}");
+            }
         }
     }
 
