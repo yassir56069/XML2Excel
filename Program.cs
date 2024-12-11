@@ -341,7 +341,7 @@ class XmlToExcelConverter
     private static void BasicSQLQueryTest()
     {
         // SQL query
-        string query = "SELECT 1 FROM XmlRepo";
+        string query = "SELECT TOP 1 * FROM XmlRepo";
 
         // connection
         using (SqlConnection connection = new SqlConnection(connectionString))
