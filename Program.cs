@@ -25,9 +25,14 @@ class XmlToExcelConverter
     private readonly  string watchFolder;
 
     /// <summary>
-    /// Folder for processed xmls in batch runs, to avoid duplicate batch runs where possible
+    /// Folder for processed xmls in batch runs, to avoid duplicate batch runs where possible. ALso receives reverted xmls
     /// </summary>
     private readonly  string processedBatchFolder;
+
+    /// <summary>
+    /// Folder used for revert operation, 
+    /// </summary>
+    private readonly string revertFolder;
 
     /// <summary>
     /// Destination folder where converted Excel files will be saved
@@ -44,7 +49,7 @@ class XmlToExcelConverter
     /// </summary>
     /// <param name="watchFolder">Directory to monitor for XML files</param>
     /// <param name="destinationFolder">Directory where converted files will be saved</param>
-    public XmlToExcelConverter(string watchFolder, string destinationFolder, string processedBatchFolder)
+    public XmlToExcelConverter(string watchFolder, string destinationFolder, string processedBatchFolder, string revertFolder)
     {
         // Establish SQL Connection
         connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
@@ -54,6 +59,7 @@ class XmlToExcelConverter
         this.watchFolder = watchFolder;
         this.destinationFolder = destinationFolder;
         this.processedBatchFolder = processedBatchFolder;
+        this.revertFolder = revertFolder;
         this.initialFilesFolder = Path.Combine(destinationFolder, "InitialFiles");
 
         // Create directories if they don't exist
@@ -61,6 +67,7 @@ class XmlToExcelConverter
         Directory.CreateDirectory(destinationFolder);
         Directory.CreateDirectory(processedBatchFolder);
         Directory.CreateDirectory(initialFilesFolder);
+        Directory.CreateDirectory(revertFolder);
 
         // Set EPPlus license context (required for EPPlus 5.0+)
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -127,6 +134,111 @@ class XmlToExcelConverter
             Thread.Sleep(1000);
         }
     }
+
+    /// <summary>
+    /// Queries the XmlRepo table to retrieve the earliest entry or an entry by specific ID
+    /// </summary>
+    /// <param name="id">Optional ID to query a specific record</param>
+    private static void QueryXmlRepo(int? id = null)
+    {
+        string query;
+        if (id == null)
+        {
+            // Query for the earliest entry by XmlDateOfEntry
+            query = @"
+                SELECT TOP 1 XmlID, XmlFile, XmlDateOfEntry 
+                FROM XmlRepo 
+                ORDER BY XmlDateOfEntry ASC";
+        }
+        else
+        {
+            // Query for a specific entry by XmlID
+            query = @"
+                SELECT XmlID, XmlFile, XmlDateOfEntry 
+                FROM XmlRepo 
+                WHERE XmlID = @XmlID";
+        }
+
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            try
+            {
+                connection.Open();
+
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    // Add parameter if querying by ID
+                    if (id.HasValue)
+                    {
+                        command.Parameters.AddWithValue("@XmlID", id.Value);
+                    }
+
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            int xmlId = reader.GetInt32(0);
+                            string xmlName = reader.GetString(1);
+                            DateTime xmlDateOfEntry = reader.GetDateTime(2);
+
+                            Console.WriteLine($"Query Result:");
+                            Console.WriteLine($"XmlID: {xmlId}");
+                            Console.WriteLine($"XmlName: {xmlName}");
+                            Console.WriteLine($"XmlDateOfEntry: {xmlDateOfEntry}");
+                        }
+                        else if (id.HasValue)
+                        {
+                            Console.WriteLine($"No entry found with XmlID: {id.Value}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred during query: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Converts existing Excel files in the revert folder back to XML
+    /// </summary>
+    /// <returns>Number of files converted</returns>
+    public int ConvertExcelToXmlBatchHandling()
+    {
+        // Check for existing Excel files
+        string[] existingExcelFiles = Directory.GetFiles(revertFolder, "*.xlsx");
+        int convertedFiles = 0;
+        Console.WriteLine($"Operating in revert folder: {revertFolder}");
+
+        if (existingExcelFiles.Length > 0)
+        {
+            Console.WriteLine($"Found {existingExcelFiles.Length} existing Excel file(s).");
+
+            // Convert existing files
+            foreach (var file in existingExcelFiles)
+            {
+                try
+                {
+                    ConvertExcelToXml(file);
+                    convertedFiles++;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
+                }
+            }
+
+            Console.WriteLine($"Converted {convertedFiles} file(s) back to XML in batch mode.");
+        }
+        else
+        {
+            Console.WriteLine("No Excel files found in the revert folder.");
+        }
+
+        return convertedFiles;
+    }
+
 
     /// <summary>
     /// Event handler for newly created XML files in the watched directory
@@ -229,103 +341,125 @@ class XmlToExcelConverter
     }
 
     /// <summary>
-    /// Tests the SQL Connection with a basic query from the XmlRepo File. If this isn't working then there's a problem with the connection.
+    /// Converts an Excel file back to XML
     /// </summary>
-    private static void BasicSQLQueryTest()
+    /// <param name="excelFilePath">Full path to the Excel file</param>
+    private void ConvertExcelToXml(string excelFilePath)
     {
-        // SQL query
-        string query = "SELECT 1 FROM XmlRepo";
-
-        // connection
-        using (SqlConnection connection = new SqlConnection(connectionString))
+        try
         {
-            try
-            {
-                connection.Open();
-                Console.WriteLine("Connection successful!");
+            FileInfo fileInfo = new FileInfo(excelFilePath);
 
-                // Execute query
-                using (SqlCommand command = new SqlCommand(query, connection))
+            // Check if file exists
+            if (!fileInfo.Exists)
+            {
+                Console.WriteLine($"File not found: {excelFilePath}");
+                return;
+            }
+
+            // Load the Excel package
+            using (var package = new ExcelPackage(fileInfo))
+            {
+                // Check if workbook is null
+                if (package.Workbook == null)
                 {
-                    using (SqlDataReader reader = command.ExecuteReader())
+                    Console.WriteLine($"Error: Workbook is null for file {excelFilePath}");
+                    return;
+                }
+
+                // Create a new XML document
+                XDocument xmlDoc = new XDocument(
+                    new XDeclaration("1.0", "utf-8", "yes"),
+                    new XElement("root")
+                );
+
+                // Process each worksheet
+                foreach (var worksheet in package.Workbook.Worksheets)
+                {
+                    // Skip worksheets with no dimension (empty worksheets)
+                    if (worksheet.Dimension == null)
                     {
-                        while (reader.Read())
+                        Console.WriteLine($"Skipping empty worksheet: {worksheet.Name}");
+                        continue;
+                    }
+
+                    // Validate worksheet dimensions
+                    int startRow = worksheet.Dimension.Start.Row;
+                    int endRow = worksheet.Dimension.End.Row;
+                    int startCol = worksheet.Dimension.Start.Column;
+                    int endCol = worksheet.Dimension.End.Column;
+
+                    // Ensure there are headers
+                    if (endRow < startRow)
+                    {
+                        Console.WriteLine($"Worksheet {worksheet.Name} has no rows");
+                        continue;
+                    }
+
+                    // Get headers (first row)
+                    var headers = Enumerable.Range(startCol, endCol - startCol + 1)
+                        .Select(col =>
                         {
-                            // Replace 0 and 1 with your column indices
-                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
+                            string headerText = worksheet.Cells[startRow, col].Text;
+                            return string.IsNullOrWhiteSpace(headerText) ? $"Column{col}" : headerText;
+                        })
+                        .ToList();
+
+                    // Create a parent element for this worksheet
+                    var worksheetElement = new XElement(worksheet.Name);
+                    xmlDoc.Root.Add(worksheetElement);
+
+                    // Process data rows (start from second row, assuming first row is headers)
+                    for (int row = startRow + 1; row <= endRow; row++)
+                    {
+                        var rowElement = new XElement(GetSingularForm(worksheet.Name));
+
+                        // Add each cell as an element
+                        for (int col = startCol; col <= endCol; col++)
+                        {
+                            // Ensure headers list is not out of bounds
+                            if (col - startCol >= headers.Count)
+                            {
+                                Console.WriteLine($"Warning: Column index out of bounds for worksheet {worksheet.Name}");
+                                break;
+                            }
+
+                            string cellValue = worksheet.Cells[row, col].Text;
+                            string headerName = headers[col - startCol];
+
+                            // Only add non-empty values
+                            if (!string.IsNullOrWhiteSpace(cellValue))
+                            {
+                                rowElement.Add(new XElement(headerName, cellValue));
+                            }
+                        }
+
+                        // Only add row if it has elements
+                        if (rowElement.Elements().Any())
+                        {
+                            worksheetElement.Add(rowElement);
                         }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An error occurred: {ex.Message}");
+
+                // Determine output path in ProcessedXMLs folder
+                string outputFileName = Path.Combine(
+                    processedBatchFolder,
+                    Path.GetFileNameWithoutExtension(excelFilePath) + ".xml"
+                );
+
+                // Save the XML file
+                xmlDoc.Save(outputFileName);
+
+                Console.WriteLine($"Converted {Path.GetFileName(excelFilePath)} back to XML: {outputFileName}");
             }
         }
-    }
-
-    /// <summary>
-    /// Queries the XmlRepo table to retrieve the earliest entry or an entry by specific ID
-    /// </summary>
-    /// <param name="id">Optional ID to query a specific record</param>
-    private static void QueryXmlRepo(int? id = null)
-    {
-        string query;
-        if (id == null)
+        catch (Exception ex)
         {
-            // Query for the earliest entry by XmlDateOfEntry
-            query = @"
-                SELECT TOP 1 XmlID, XmlFile, XmlDateOfEntry 
-                FROM XmlRepo 
-                ORDER BY XmlDateOfEntry ASC";
-        }
-        else
-        {
-            // Query for a specific entry by XmlID
-            query = @"
-                SELECT XmlID, XmlFile, XmlDateOfEntry 
-                FROM XmlRepo 
-                WHERE XmlID = @XmlID";
-        }
-
-        using (SqlConnection connection = new SqlConnection(connectionString))
-        {
-            try
-            {
-                connection.Open();
-
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    // Add parameter if querying by ID
-                    if (id.HasValue)
-                    {
-                        command.Parameters.AddWithValue("@XmlID", id.Value);
-                    }
-
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            int xmlId = reader.GetInt32(0);
-                            string xmlName = reader.GetString(1);
-                            DateTime xmlDateOfEntry = reader.GetDateTime(2);
-
-                            Console.WriteLine($"Query Result:");
-                            Console.WriteLine($"XmlID: {xmlId}");
-                            Console.WriteLine($"XmlName: {xmlName}");
-                            Console.WriteLine($"XmlDateOfEntry: {xmlDateOfEntry}");
-                        }
-                        else if (id.HasValue)
-                        {
-                            Console.WriteLine($"No entry found with XmlID: {id.Value}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An error occurred during query: {ex.Message}");
-            }
+            Console.WriteLine($"Detailed error converting {Path.GetFileName(excelFilePath)} to XML:");
+            Console.WriteLine($"Error Type: {ex.GetType().Name}");
+            Console.WriteLine($"Error Message: {ex.Message}");
+            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
         }
     }
 
@@ -392,6 +526,22 @@ class XmlToExcelConverter
         }
     }
 
+
+    /// <summary>
+    /// Converts a plural worksheet name to its singular form
+    /// </summary>
+    /// <param name="pluralName">Plural name of the worksheet</param>
+    /// <returns>Singular form of the worksheet name</returns>
+    private string GetSingularForm(string pluralName)
+    {
+        // Simple pluralization rules (can be expanded)
+        if (pluralName.EndsWith("s"))
+        {
+            return pluralName.Substring(0, pluralName.Length - 1);
+        }
+        return pluralName;
+    }
+
     /// <summary>
     /// Main entry point of the application
     /// </summary>
@@ -402,11 +552,10 @@ class XmlToExcelConverter
         string watchFolder = @"C:\XmlWatcherService\XML2EXCEL\XMLInput";
         string destinationFolder = @"C:\XmlWatcherService\XML2EXCEL\ConvertedXML";
         string processedXmlsFolder = @"C:\XmlWatcherService\XML2EXCEL\ProcessedXMLs";
+        string revertFolder =  @"C:\XmlWatcherService\XML2EXCEL\RevertToXML";
 
         // Create converter
-        var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder);
-
-        //BasicSQLQueryTest(); // Test Database Connection
+        var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder, revertFolder);
 
 
         // Determine mode based on command-line argument
@@ -422,6 +571,11 @@ class XmlToExcelConverter
                 case "watch":
                     Console.WriteLine("Running in Watch Mode");
                     converter.ConvertXmlToExcelWatchHandling();
+                    break;
+
+                case "revert":
+                    Console.WriteLine("Running in Revert Mode");
+                    converter.ConvertExcelToXmlBatchHandling();
                     break;
 
                 case "query":
@@ -443,9 +597,8 @@ class XmlToExcelConverter
                     }
                     break;
 
-
                 default:
-                    Console.WriteLine("Invalid mode. Use 'batch' or 'watch'.");
+                    Console.WriteLine("Invalid mode. Use 'batch', 'watch', 'query', or 'revert'.");
                     ShowUsage();
                     return;
             }
@@ -462,9 +615,10 @@ class XmlToExcelConverter
     static void ShowUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("XmlToExcelConverter.exe batch   - Convert existing XML files");
-        Console.WriteLine("XmlToExcelConverter.exe watch   - Watch folder for new XML files");
-        Console.WriteLine("XmlToExcelConverter.exe query   - Query earliest XmlRepo entry");
+        Console.WriteLine("XmlToExcelConverter.exe batch        - Convert existing XML files");
+        Console.WriteLine("XmlToExcelConverter.exe watch        - Watch folder for new XML files");
+        Console.WriteLine("XmlToExcelConverter.exe revert       - Convert Excel files back to XML");
+        Console.WriteLine("XmlToExcelConverter.exe query        - Query earliest XmlRepo entry");
         Console.WriteLine("XmlToExcelConverter.exe query <id>   - Query XmlRepo entry by ID");
     }
 }
