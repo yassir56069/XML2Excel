@@ -22,22 +22,22 @@ class XmlToExcelConverter
     /// <summary>
     /// Folder path where XML input files are located
     /// </summary>
-    private readonly string watchFolder;
+    private  string watchFolder;
 
     /// <summary>
     /// Folder for processed xmls in batch runs, to avoid duplicate batch runs where possible
     /// </summary>
-    private readonly string processedBatchFolder;
+    private  string processedBatchFolder;
 
     /// <summary>
     /// Destination folder where converted Excel files will be saved
     /// </summary>
-    private readonly string destinationFolder;
+    private  string destinationFolder;
 
     /// <summary>
     /// Subfolder for initially found XML files
     /// </summary>
-    private readonly string initialFilesFolder;
+    private  string initialFilesFolder;
 
     /// <summary>
     /// Initializes a new instance of the XmlToExcelConverter with specified folder paths
@@ -229,6 +229,107 @@ class XmlToExcelConverter
     }
 
     /// <summary>
+    /// Tests the SQL Connection with a basic query from the XmlRepo File. If this isn't working then there's a problem with the connection.
+    /// </summary>
+    private static void BasicSQLQueryTest()
+    {
+        // SQL query
+        string query = "SELECT 1 FROM XmlRepo";
+
+        // connection
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            try
+            {
+                connection.Open();
+                Console.WriteLine("Connection successful!");
+
+                // Execute query
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            // Replace 0 and 1 with your column indices
+                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Queries the XmlRepo table to retrieve the earliest entry or an entry by specific ID
+    /// </summary>
+    /// <param name="id">Optional ID to query a specific record</param>
+    private static void QueryXmlRepo(int? id = null)
+    {
+        string query;
+        if (id == null)
+        {
+            // Query for the earliest entry by XmlDateOfEntry
+            query = @"
+                SELECT TOP 1 XmlID, XmlName, XmlDateOfEntry 
+                FROM XmlRepo 
+                ORDER BY XmlDateOfEntry ASC";
+        }
+        else
+        {
+            // Query for a specific entry by XmlID
+            query = @"
+                SELECT XmlID, XmlName, XmlDateOfEntry 
+                FROM XmlRepo 
+                WHERE XmlID = @XmlID";
+        }
+
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            try
+            {
+                connection.Open();
+
+                using (SqlCommand command = new SqlCommand(query, connection))
+                {
+                    // Add parameter if querying by ID
+                    if (id.HasValue)
+                    {
+                        command.Parameters.AddWithValue("@XmlID", id.Value);
+                    }
+
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            int xmlId = reader.GetInt32(0);
+                            string xmlName = reader.GetString(1);
+                            DateTime xmlDateOfEntry = reader.GetDateTime(2);
+
+                            Console.WriteLine($"Query Result:");
+                            Console.WriteLine($"XmlID: {xmlId}");
+                            Console.WriteLine($"XmlName: {xmlName}");
+                            Console.WriteLine($"XmlDateOfEntry: {xmlDateOfEntry}");
+                        }
+                        else if (id.HasValue)
+                        {
+                            Console.WriteLine($"No entry found with XmlID: {id.Value}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred during query: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
     /// Flattens a complex XML structure into a dictionary of lists for Excel conversion
     /// </summary>
     /// <param name="element">Root XML element to flatten</param>
@@ -305,7 +406,7 @@ class XmlToExcelConverter
         // Create converter
         var converter = new XmlToExcelConverter(watchFolder, destinationFolder, processedXmlsFolder);
 
-        BasicSQLQueryTest();
+        //BasicSQLQueryTest(); // Test Database Connection
 
 
         // Determine mode based on command-line argument
@@ -323,6 +424,26 @@ class XmlToExcelConverter
                     converter.ConvertXmlToExcelWatchHandling();
                     break;
 
+                case "query":
+                    Console.WriteLine("Running Query Mode");
+                    if (args.Length == 1)
+                    {
+                        // No ID specified, query earliest entry
+                        QueryXmlRepo();
+                    }
+                    else if (args.Length == 2 && int.TryParse(args[1], out int id))
+                    {
+                        // ID specified, query specific entry
+                        QueryXmlRepo(id);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid query syntax. Use 'query' or 'query <id>, eg: \"XML2Excel.exe query \" or \"XML2Excel.exe query 1\"");
+                        ShowUsage();
+                    }
+                    break;
+
+
                 default:
                     Console.WriteLine("Invalid mode. Use 'batch' or 'watch'.");
                     ShowUsage();
@@ -336,42 +457,6 @@ class XmlToExcelConverter
     }
 
     /// <summary>
-    /// Tests the SQL Connection with a basic query from the XmlRepo File. If this isn't working then there's a problem with the connection.
-    /// </summary>
-    private static void BasicSQLQueryTest()
-    {
-        // SQL query
-        string query = "SELECT TOP 1 * FROM XmlRepo";
-
-        // connection
-        using (SqlConnection connection = new SqlConnection(connectionString))
-        {
-            try
-            {
-                connection.Open();
-                Console.WriteLine("Connection successful!");
-
-                // Execute query
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            // Replace 0 and 1 with your column indices
-                            Console.WriteLine($"ID: {reader[0]}, Name: {reader[1]}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An error occurred: {ex.Message}");
-            }
-        }
-    }
-
-    /// <summary>
     /// Displays usage instructions for the application
     /// </summary>
     static void ShowUsage()
@@ -379,5 +464,7 @@ class XmlToExcelConverter
         Console.WriteLine("Usage:");
         Console.WriteLine("XmlToExcelConverter.exe batch   - Convert existing XML files");
         Console.WriteLine("XmlToExcelConverter.exe watch   - Watch folder for new XML files");
+        Console.WriteLine("XmlToExcelConverter.exe query   - Query earliest XmlRepo entry");
+        Console.WriteLine("XmlToExcelConverter.exe query <id>   - Query XmlRepo entry by ID");
     }
 }
