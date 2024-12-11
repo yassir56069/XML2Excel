@@ -22,22 +22,22 @@ class XmlToExcelConverter
     /// <summary>
     /// Folder path where XML input files are located
     /// </summary>
-    private  string watchFolder;
+    private readonly  string watchFolder;
 
     /// <summary>
     /// Folder for processed xmls in batch runs, to avoid duplicate batch runs where possible
     /// </summary>
-    private  string processedBatchFolder;
+    private readonly  string processedBatchFolder;
 
     /// <summary>
     /// Destination folder where converted Excel files will be saved
     /// </summary>
-    private  string destinationFolder;
+    private readonly  string destinationFolder;
 
     /// <summary>
     /// Subfolder for initially found XML files
     /// </summary>
-    private  string initialFilesFolder;
+    private readonly  string initialFilesFolder;
 
     /// <summary>
     /// Initializes a new instance of the XmlToExcelConverter with specified folder paths
