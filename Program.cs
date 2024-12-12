@@ -211,8 +211,8 @@ private static void InsertXmlToDB(string xmlFilePath)
 {
     // Define the query with parameters
     string query = @"
-        INSERT INTO XmlRepo (XmlFile, XmlDateOfEntry)
-        VALUES (@XmlFile, GETDATE());
+        INSERT INTO XmlRepo (XmlFile, XmlDateOfEntry, XmlNote)
+        VALUES (@XmlFile, GETDATE(), 'Automated insert from XML2EXCEL program.');
     ";
 
     // Load XML document as a string
@@ -264,11 +264,16 @@ private static void InsertXmlToDB(string xmlFilePath)
             {
                 try
                 {
+                    // Run Converter 
                     ExcelToXmlConverter.ConvertExcelToXml(file, processedBatchFolder);
+                    
+                    // File path calculation
                     string outputFileName = Path.Combine(
                         processedBatchFolder,
                         Path.GetFileNameWithoutExtension(file) + ".xml"
                     );
+
+                    // Auto Insert to DB
                     InsertXmlToDB(outputFileName);
                     convertedFiles++;
                 }
@@ -372,7 +377,9 @@ private static void InsertXmlToDB(string xmlFilePath)
     /// </summary>
     /// <remarks> DEPRECATED </remarks>
     /// <param name="excelFilePath">Full path to the Excel file</param>
+#pragma warning disable IDE0051 // Remove unused private members
     private void ConvertExcelToXml(string excelFilePath)
+#pragma warning restore IDE0051 // Remove unused private members
     {
         try
         {
