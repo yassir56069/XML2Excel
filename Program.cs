@@ -142,7 +142,7 @@ class XmlToExcelConverter
     /// Queries the XmlRepo table to retrieve the earliest entry or an entry by specific ID
     /// </summary>
     /// <param name="id">Optional ID to query a specific record</param>
-    private static void QueryXmlRepo(int? id = null)
+    private static void SqlQueryBatchHandling(int? id = null)
     {
         string query;
         if (id == null)
@@ -262,16 +262,20 @@ private static void InsertXmlToDB(string xmlFilePath)
             // Convert existing files
             foreach (var file in existingExcelFiles)
             {
-                //try
-                //{
-                    ConvertExcelToXml(file);
-                //XmlToXlsx.RevertToXml(file, processedBatchFolder);
-                convertedFiles++;
-                //}
-                //catch (Exception ex)
-                //{
-                //    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
-                //}
+                try
+                {
+                    ExcelToXmlConverter.ConvertExcelToXml(file, processedBatchFolder);
+                    string outputFileName = Path.Combine(
+                        processedBatchFolder,
+                        Path.GetFileNameWithoutExtension(file) + ".xml"
+                    );
+                    InsertXmlToDB(outputFileName);
+                    convertedFiles++;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
+                }
             }
 
             Console.WriteLine($"Converted {convertedFiles} file(s) back to XML in batch mode.");
@@ -363,9 +367,10 @@ private static void InsertXmlToDB(string xmlFilePath)
     }
 
 
-    /// <summary>
+    /// <summary> 
     /// Converts an Excel file back to XML
     /// </summary>
+    /// <remarks> DEPRECATED </remarks>
     /// <param name="excelFilePath">Full path to the Excel file</param>
     private void ConvertExcelToXml(string excelFilePath)
     {
@@ -593,12 +598,12 @@ private static void InsertXmlToDB(string xmlFilePath)
                     if (args.Length == 1)
                     {
                         // No ID specified, query earliest entry
-                        QueryXmlRepo();
+                        SqlQueryBatchHandling();
                     }
                     else if (args.Length == 2 && int.TryParse(args[1], out int id))
                     {
                         // ID specified, query specific entry
-                        QueryXmlRepo(id);
+                        SqlQueryBatchHandling(id);
                     }
                     else
                     {

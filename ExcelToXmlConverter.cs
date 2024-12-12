@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using OfficeOpenXml;
 using System.Xml.Linq;
+using System.Xml;
 
 namespace XML2Excel
 {
@@ -42,11 +43,31 @@ namespace XML2Excel
                         )
                     )
                 );
+                // Determine output path in ProcessedXMLs folder
+                string outputFileName = Path.Combine(
+                    outputXmlPath,
+                    Path.GetFileNameWithoutExtension(inputExcelPath) + ".xml"
+                );
+                // Configure XmlWriter settings to omit the XML declaration
+                XmlWriterSettings settings = new XmlWriterSettings
+                {
+                    OmitXmlDeclaration = true,
+                    Indent = true // Keeps the output indented for readability
+                };
 
-                // Save XML file
-                xmlDoc.Save(outputXmlPath);
+
+                // Safe XML File
+                using (XmlWriter writer = XmlWriter.Create(outputFileName, settings))
+                {
+                    xmlDoc.Save(writer);
+                }
+
+
+                Console.WriteLine($"Converted {Path.GetFileName(outputFileName)} back to XML: {outputFileName}");
             }
         }
+
+
 
         private static XElement CreateDocumentsElement(ExcelWorksheet worksheet)
         {
@@ -82,7 +103,7 @@ namespace XML2Excel
 
         private static XElement CreateDocumentLinesElement(ExcelWorksheet worksheet)
         {
-            var documentLinesElement = new XElement("row");
+            _ = new XElement("row");
 
             // Find start of document lines
             int startRow = FindStartOfDocumentLines(worksheet);
