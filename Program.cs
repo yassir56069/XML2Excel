@@ -93,17 +93,17 @@ class XmlToExcelConverter
             // Convert existing files
             foreach (var file in existingXmlFiles)
             {
-                //try
-                //{
+                try
+                {
                     ConvertXmlToExcel(file);
-                XmlToXlsx.ConvertXmlToExcel(file, destinationFolder);
+                    XmlToXlsx.ConvertXmlToExcel(file, destinationFolder);
                     convertedFiles++;
-                //}
-                //catch (Exception ex)
-                //{
-                //    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
-                //}
             }
+                catch (Exception ex)
+                {
+                Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
 
             Console.WriteLine($"Converted {convertedFiles} file(s) in batch mode.");
         }
@@ -211,15 +211,16 @@ private static void InsertXmlToDB(string xmlFilePath)
 {
     // Define the query with parameters
     string query = @"
-        INSERT INTO XmlRepo (XmlFile, XmlDateOfEntry, XmlNote)
-        VALUES (@XmlFile, GETDATE(), 'Automated insert from XML2EXCEL program.');
+        INSERT INTO XmlRepo (XmlFileName,XmlFileContents, XmlDateOfEntry, XmlNote)
+        VALUES (@XmlFileName,@XmlFileContents, GETDATE(), 'Automated insert from XML2EXCEL program.');
     ";
 
     // Load XML document as a string
+    string xmlFileName = Path.GetFileNameWithoutExtension(xmlFilePath) + ".xlsx";
     XDocument xmlContent = XDocument.Load(xmlFilePath);
 
 
-        using (SqlConnection connection = new SqlConnection(connectionString))
+    using (SqlConnection connection = new SqlConnection(connectionString))
     {
         try
         {
@@ -228,7 +229,9 @@ private static void InsertXmlToDB(string xmlFilePath)
             using (SqlCommand command = new SqlCommand(query, connection))
             {
                 // Add the XML content as a parameter
-                command.Parameters.AddWithValue("@XmlFile", xmlContent.ToString());
+                command.Parameters.AddWithValue("@XmlFileName", xmlFileName);
+                command.Parameters.AddWithValue("@XmlFileContents", xmlContent.ToString());
+
 
                 // Execute the query
                 int rowsAffected = command.ExecuteNonQuery();
