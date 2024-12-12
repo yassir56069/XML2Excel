@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using OfficeOpenXml;
 using System.Data.SqlClient;
+using XML2Excel;
 
 /// <summary>
 /// Provides a robust XML to Excel conversion utility with batch and file watching capabilities
@@ -56,6 +57,7 @@ class XmlToExcelConverter
 
 
         // Ensure all required directories exist
+
         this.watchFolder = watchFolder;
         this.destinationFolder = destinationFolder;
         this.processedBatchFolder = processedBatchFolder;
@@ -91,15 +93,16 @@ class XmlToExcelConverter
             // Convert existing files
             foreach (var file in existingXmlFiles)
             {
-                try
-                {
+                //try
+                //{
                     ConvertXmlToExcel(file);
+                XmlToXlsx.ConvertXmlToExcel(file, destinationFolder);
                     convertedFiles++;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
-                }
+                //}
+                //catch (Exception ex)
+                //{
+                //    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
+                //}
             }
 
             Console.WriteLine($"Converted {convertedFiles} file(s) in batch mode.");
@@ -259,15 +262,16 @@ private static void InsertXmlToDB(string xmlFilePath)
             // Convert existing files
             foreach (var file in existingExcelFiles)
             {
-                try
-                {
+                //try
+                //{
                     ConvertExcelToXml(file);
-                    convertedFiles++;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
-                }
+                //XmlToXlsx.RevertToXml(file, processedBatchFolder);
+                convertedFiles++;
+                //}
+                //catch (Exception ex)
+                //{
+                //    Console.WriteLine($"Error converting {Path.GetFileName(file)}: {ex.Message}");
+                //}
             }
 
             Console.WriteLine($"Converted {convertedFiles} file(s) back to XML in batch mode.");
