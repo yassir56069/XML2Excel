@@ -53,7 +53,7 @@ class XmlToExcelConverter
     public XmlToExcelConverter(string watchFolder, string destinationFolder, string processedBatchFolder, string revertFolder)
     {
         // Establish SQL Connection
-        connectionString = System.Configuration.ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
+        connectionString = "Data Source=DESKTOP-PNDPM1U\\SQLEXPRESS;Initial Catalog=ServiceSystemDB;Persist Security Info=True;User ID=admin;Password=yM2c$!T%qypzrJaL;";
 
 
         // Ensure all required directories exist
